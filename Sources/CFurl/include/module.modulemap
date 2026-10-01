@@ -1,0 +1,4 @@
+module CFurl {
+    header "furl.h"
+    export *
+}

@@ -1,0 +1,11 @@
+# name, path, mode
+# mode "source" skips .build, DerivedData, and .git
+# mode "tree" furls the folder as it sits on disk
+Furl source	/Users/timbestler/Apps-Usefull/Furl	source
+TextPad	/Users/timbestler/Apps-Usefull/TextPad	source
+Enigma	/Users/timbestler/Apps-Usefull/Enigma	source
+Sigil source	/Users/timbestler/Apps-Usefull/Sigil	source
+LCARS source	/Users/timbestler/Apps-Usefull/LCARS-macOS-Suite	source
+Sigil	/Users/timbestler/Apps-Usefull/Sigil	tree
+LCARS	/Users/timbestler/Apps-Usefull/LCARS-macOS-Suite	tree
+Chain Files	/Users/timbestler/SynologyDrive/Chain Files	tree

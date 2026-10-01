@@ -1,0 +1,2 @@
+freeze the compression engine for 1.x and only accept changes that fall into one of three categories: correctness fixes, clear speed wins with no meaningful ratio loss, or clear ratio wins with no meaningful speed regression across the benchmark suite.
+Everything else can wait for a hypothetical Furl 2, especially the big architectural things like streaming instead of holding the solid archive in memory.

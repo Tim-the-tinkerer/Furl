@@ -1,0 +1,6 @@
+.build/
+Furl.app/
+.swiftpm/
+*.xcodeproj
+.DS_Store
+Note.txt/
