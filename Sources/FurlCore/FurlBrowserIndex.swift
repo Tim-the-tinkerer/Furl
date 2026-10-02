@@ -30,45 +30,55 @@ public struct FurlBrowserRow: Equatable, Sendable, Identifiable {
 public enum FurlBrowserIndex {
     /// `folder` is empty at the archive root, or a path without a trailing slash.
     public static func children(of folder: String, in files: [FurlListedFile]) -> [FurlBrowserRow] {
-        var rows: [String: FurlBrowserRow] = [:]
+        let prefix = folder.split(separator: "/").map(String.init)
+        struct Acc {
+            var isDirectory = false
+            var size: UInt64 = 0
+            var modified: Date?
+            var file: FurlListedFile?
+        }
+        var rows: [String: Acc] = [:]
         for file in files {
             let parts = file.path.split(separator: "/").map(String.init)
-            guard !parts.isEmpty else { continue }
-            let prefix = folder.split(separator: "/").map(String.init)
             guard parts.count > prefix.count, Array(parts.prefix(prefix.count)) == prefix else { continue }
             let name = parts[prefix.count]
-            let isLast = parts.count == prefix.count + 1
             let path = folder.isEmpty ? name : folder + "/" + name
-            if isLast {
-                if rows[path]?.isDirectory == true {
-                    continue
+            var acc = rows[path] ?? Acc()
+            if parts.count == prefix.count + 1 {
+                acc.file = file
+            } else {
+                acc.isDirectory = true
+                acc.size += file.uncompressedSize
+                let modified = file.modified
+                if acc.modified.map({ modified > $0 }) ?? true {
+                    acc.modified = modified
                 }
-                rows[path] = FurlBrowserRow(
-                    name: name,
-                    path: path,
-                    isDirectory: false,
-                    uncompressedSize: file.isSymlink ? 0 : file.uncompressedSize,
-                    modified: file.modified,
-                    isSymlink: file.isSymlink
-                )
-            } else if var existing = rows[path], existing.isDirectory {
-                existing.uncompressedSize += file.uncompressedSize
-                if let modified = file.modified, existing.modified.map({ modified > $0 }) ?? true {
-                    existing.modified = modified
-                }
-                rows[path] = existing
-            } else if rows[path] == nil {
-                rows[path] = FurlBrowserRow(
+            }
+            rows[path] = acc
+        }
+        let built = rows.map { path, acc -> FurlBrowserRow in
+            let name = path.split(separator: "/").last.map(String.init) ?? path
+            if acc.isDirectory {
+                return FurlBrowserRow(
                     name: name,
                     path: path,
                     isDirectory: true,
-                    uncompressedSize: file.uncompressedSize,
-                    modified: file.modified,
+                    uncompressedSize: acc.size,
+                    modified: acc.modified,
                     isSymlink: false
                 )
             }
+            let file = acc.file
+            return FurlBrowserRow(
+                name: name,
+                path: path,
+                isDirectory: false,
+                uncompressedSize: file?.isSymlink == true ? 0 : (file?.uncompressedSize ?? 0),
+                modified: file?.modified,
+                isSymlink: file?.isSymlink ?? false
+            )
         }
-        return rows.values.sorted { lhs, rhs in
+        return built.sorted { lhs, rhs in
             if lhs.isDirectory != rhs.isDirectory {
                 return lhs.isDirectory
             }

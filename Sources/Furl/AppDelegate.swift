@@ -7,6 +7,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
 
+    /// A document open already has the main window. An untitled one would be a second window.
+    func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool { false }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.activate(ignoringOtherApps: true)
         NotificationCenter.default.addObserver(
@@ -57,6 +60,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             } else {
                 pendingURLs.append(contentsOf: urls)
             }
+            absorbExtraWindows()
+        }
+    }
+
+    /// Finder’s open still asks SwiftUI for another window. Keep the oldest one.
+    func absorbExtraWindows() {
+        for delay in [0.0, 0.05, 0.2, 0.45] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                self?.closeDuplicateWindows()
+            }
+        }
+    }
+
+    private func closeDuplicateWindows() {
+        let windows = contentWindows()
+        guard let keeper = windows.first else { return }
+        for window in windows.dropFirst() {
+            window.close()
+        }
+        if !keeper.isKeyWindow {
+            keeper.makeKeyAndOrderFront(nil)
+        }
+        configureWindows()
+    }
+
+    private func contentWindows() -> [NSWindow] {
+        NSApp.windows.filter { window in
+            window.isVisible &&
+                window.canBecomeMain &&
+                window.level == .normal &&
+                !window.isSheet &&
+                !(window is NSPanel) &&
+                window.styleMask.contains(.titled)
         }
     }
 

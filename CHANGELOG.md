@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.5.15
+
+- Opening a .furl stays in one window.
+
+## 1.5.14
+
+- You can browse a .furl. Folders, sizes, and dates come from the file table, so the list does not unpack the solid stream. Opening, Quick Look, and Extract read that stream once. The compressor is unchanged.
+
 ## 1.5.13
 
 - A Burrows-Wheeler block codes move-to-front zeros as runs, then an order-0 model, instead of order-5 PPM. The sample in the middle of each piece still has to come out clearly smaller than order-5 PPM, or that piece stays on PPM. Archives written without the run coder still unpack. A block that uses it needs this version.

@@ -782,6 +782,83 @@ expectThrow("trailing junk", containing: "trailing") {
     ))
 }
 
+// MARK: - Catalog (file table, no decompress)
+
+do {
+    let when = Date(timeIntervalSince1970: 1_700_000_000)
+    let hello = Data("hello".utf8)
+    let note = Data("x".utf8)
+    let packed = try FurlArchive.pack([
+        FurlEntry(path: "dir/a.txt", data: hello, modified: when, mode: 0o644),
+        FurlEntry(path: "note.txt", data: note, modified: when, mode: 0o644),
+        FurlEntry(path: "link", data: Data(), modified: when, mode: 0o755, symlinkTarget: "dir/a.txt"),
+    ], level: 1)
+    let listed = try FurlArchive.catalog(packed)
+    let unpacked = try FurlArchive.unpack(packed)
+    expect(listed.version == 2, "catalog version \(listed.version)")
+    expect(listed.uncompressedBytes == UInt64(hello.count + note.count), "catalog uncompressed \(listed.uncompressedBytes)")
+    expect(listed.files.count == unpacked.count, "catalog count \(listed.files.count)")
+    expect(listed.compressedBytes > 0 && listed.compressedBytes < UInt64(packed.count), "catalog compressed length \(listed.compressedBytes)")
+    for file in listed.files {
+        guard let entry = unpacked.first(where: { $0.path == file.path }) else {
+            expect(false, "catalog missing \(file.path)")
+            continue
+        }
+        expect(file.uncompressedSize == (file.isSymlink ? 0 : UInt64(entry.data.count)), "catalog size \(file.path)")
+        expect(file.modified.timeIntervalSince1970 == entry.modified?.timeIntervalSince1970, "catalog mtime \(file.path)")
+        expect(file.symlinkTarget == entry.symlinkTarget, "catalog link \(file.path)")
+        expect(file.mode == entry.mode, "catalog mode \(file.path) \(file.mode) vs \(entry.mode)")
+    }
+    expect(listed.files.contains { $0.path == "dir/a.txt" && $0.uncompressedSize == 5 && $0.symlinkTarget == nil }, "nested file listed")
+    expect(listed.files.contains { $0.path == "link" && $0.symlinkTarget == "dir/a.txt" && $0.uncompressedSize == 0 }, "symlink listed")
+
+    var damaged = packed
+    let payloadStart = packed.count - Int(listed.compressedBytes)
+    damaged[payloadStart] ^= 0xFF
+    let still = try FurlArchive.catalog(damaged)
+    expect(still == listed, "damaged payload still catalogs")
+    expectThrow("damaged payload unpack") {
+        _ = try FurlArchive.unpack(damaged)
+    }
+
+    expectThrow("catalog truncated header") {
+        _ = try FurlArchive.catalog(Data("FURL".utf8))
+    }
+    expectThrow("catalog truncated table", containing: "Truncated") {
+        _ = try FurlArchive.catalog(packed.prefix(20))
+    }
+    expectThrow("catalog trailing", containing: "trailing") {
+        _ = try FurlArchive.catalog(try handArchive(
+            nfiles: 1, tableCount: 1, paths: ["a.txt"], blobs: [Data([1])], trailing: Data([0x00])
+        ))
+    }
+} catch {
+    expect(false, "catalog \(error)")
+}
+
+do {
+    let when = Date(timeIntervalSince1970: 1_700_000_000)
+    let later = Date(timeIntervalSince1970: 1_700_000_100)
+    let files = [
+        FurlListedFile(path: "b.txt", uncompressedSize: 3, modified: when, mode: 0o644),
+        FurlListedFile(path: "dir/a.txt", uncompressedSize: 10, modified: when, mode: 0o644),
+        FurlListedFile(path: "dir/sub/b.txt", uncompressedSize: 7, modified: later, mode: 0o644),
+    ]
+    let root = FurlBrowserIndex.children(of: "", in: files)
+    expect(root.map(\.name) == ["dir", "b.txt"], "folders before files \(root.map(\.name))")
+    expect(root.first?.isDirectory == true && root.first?.uncompressedSize == 17, "folder size sums descendants \(root.first?.uncompressedSize ?? 0)")
+    expect(root.first?.modified == later, "folder date is latest child")
+    let kids = FurlBrowserIndex.children(of: "dir", in: files)
+    expect(kids.map(\.name) == ["sub", "a.txt"], "dir children \(kids.map(\.name))")
+    expect(kids.first { $0.name == "a.txt" }?.isDirectory == false && kids.first { $0.name == "a.txt" }?.uncompressedSize == 10, "nested file row")
+    let clash = [
+        FurlListedFile(path: "dir", uncompressedSize: 4, modified: when, mode: 0o644),
+        FurlListedFile(path: "dir/a.txt", uncompressedSize: 10, modified: when, mode: 0o644),
+    ]
+    let clashRows = FurlBrowserIndex.children(of: "", in: clash)
+    expect(clashRows.count == 1 && clashRows[0].isDirectory && clashRows[0].path == "dir" && clashRows[0].uncompressedSize == 10, "directory wins over a same-named file")
+}
+
 do {
     let folder = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("furl-dest-\(UUID().uuidString)")
     try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)

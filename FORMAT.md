@@ -36,7 +36,7 @@ POSIX mtime is whole seconds. A time before 1970 is a signed 64-bit count in the
 
 Paths are relative, unique, at most 65,535 UTF-8 bytes, and must not contain `\\`, `:`, NUL, empty segments, `.`, or `..`. Unpackers must reject those paths rather than rewrite them. Extraction writes files before symlinks and refuses to follow a symlink while creating a path, so a link cannot redirect a later entry outside the destination. Trailing bytes after the compressed payload are invalid.
 
-The payload is the concatenation of file contents, compressed with the FCM1 stream codec. Furl 1.x holds that solid payload in memory (capped at 8 GiB).
+The payload is the concatenation of file contents, compressed with the FCM1 stream codec. Furl 1.x holds that solid payload in memory (capped at 8 GiB). The file table can be read without decompressing the payload. Per-file compressed sizes are not stored; only the whole-archive compressed length is.
 
 ## Stream (`FCM1`)
 

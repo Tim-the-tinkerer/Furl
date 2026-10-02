@@ -1,3 +1,4 @@
+import Quartz
 import SwiftUI
 
 @main
@@ -7,16 +8,25 @@ struct FurlApp: App {
 
     init() {
         CLI.runAndExitIfNeeded()
+        if let panel = QLPreviewPanel.shared() {
+            panel.dataSource = FurlQuickLook.shared
+            panel.delegate = FurlQuickLook.shared
+        }
     }
 
     var body: some Scene {
-        WindowGroup {
+        WindowGroup("Furl", id: "main") {
             ContentView()
                 .environmentObject(model)
                 .tint(Theme.accent)
+                .handlesExternalEvents(preferring: ["*"], allowing: ["*"])
                 .onAppear { appDelegate.attach(model: model) }
-                .onOpenURL { model.add([$0]) }
+                .onOpenURL { url in
+                    model.add([url])
+                    appDelegate.absorbExtraWindows()
+                }
         }
+        .handlesExternalEvents(matching: ["*"])
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 720, height: 620)
         .commands {
@@ -30,6 +40,9 @@ struct FurlApp: App {
                     .disabled(!model.canFurl)
                 Button("Unfurl") { model.unfurl() }
                     .disabled(!model.canUnfurl)
+                Button("Browse") { model.browseLatestArchive() }
+                    .keyboardShortcut("b", modifiers: [.command, .shift])
+                    .disabled(!model.canBrowse)
                 Button("Race 7-Zip") { model.race() }
                     .keyboardShortcut("r", modifiers: [.command, .shift])
                     .disabled(!model.canRace)
@@ -55,6 +68,8 @@ struct FurlApp: App {
         3. Furl writes a solid .furl archive
         4. Unfurl restores the original files
         5. Race 7-Zip runs 7-Zip ultra on the same payload and compares sizes
+
+        Open a single .furl, or double-click one in the list, to browse it. The list is the file table: folders, sizes, and dates, without unpacking the solid stream. Return opens a file or a folder. Space previews a file. Extract writes the selection, and Extract All writes the archive. The solid stream is read only when you preview or extract.
 
         Apple metadata is skipped by default: AppleDouble (._*), __MACOSX folders, .DS_Store, and resource forks (data fork only). Turn each one on or off from the Settings menu. Hidden files like .gitignore are kept.
 

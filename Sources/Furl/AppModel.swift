@@ -270,6 +270,12 @@ final class AppModel: ObservableObject {
         browserQuickLook(row)
     }
 
+    func browserExtract(_ row: FurlBrowserRow) {
+        guard let dest = chooseDirectory(prompt: "Extract") else { return }
+        let paths = expandedPaths([row])
+        Task { await extractBrowsed(paths: paths, to: dest, label: row.name) }
+    }
+
     func browserExtractSelection() {
         let rows = selectedBrowserRows()
         guard !rows.isEmpty else {
@@ -316,7 +322,7 @@ final class AppModel: ObservableObject {
             }
             let root = try previewDirectory()
             try FurlArchive.writeEntries([entry], into: root)
-            let url = root.appendingPathComponent(entry.path)
+            let url = try FurlArchive.destination(in: root, forRelative: entry.path)
             if quickLook, let panel = QLPreviewPanel.shared() {
                 FurlQuickLook.shared.url = url
                 panel.dataSource = FurlQuickLook.shared
@@ -360,14 +366,14 @@ final class AppModel: ObservableObject {
 
     private func loadSolidEntries() async throws -> [FurlEntry] {
         if let materialized { return materialized }
-        guard let browserURL else {
+        guard let archiveURL = browserURL else {
             throw FurlError.format("No archive is open.")
         }
         let control = beginRun("Reading the solid archive…")
         let report = progressHandler(control)
         defer { endRun() }
         let entries = try await Task.detached {
-            let data = try Data(contentsOf: browserURL)
+            let data = try Data(contentsOf: archiveURL)
             if control.isStopped { throw FurlError.cancelled }
             return try FurlArchive.unpack(data, progress: report)
         }.value

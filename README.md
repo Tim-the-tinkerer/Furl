@@ -2,7 +2,7 @@
 
 Native macOS app with a **custom lossless compressor**. It is not a front end for 7-Zip. The codec is LZ77 matching plus a context-mixing arithmetic coder, packed as a solid `.furl` archive.
 
-**Version:** 1.5.13 — see [CHANGELOG.md](CHANGELOG.md).
+**Version:** 1.5.15 — see [CHANGELOG.md](CHANGELOG.md).
 
 ## Where Furl should land
 
@@ -25,6 +25,11 @@ Density 9 can write that report beside the archive as `Name.parse.txt`: which mo
 - CLI on the same binary
 - Skips Apple metadata by default: `._*` AppleDouble, `__MACOSX`, `.DS_Store`, resource forks (Settings menu)
 - Settings can turn the density 9 parse report on or off
+- Browse a .furl. Folders, sizes, and dates come from the file table, so the list does not unpack the solid stream. Opening, Quick Look, and Extract read that stream once
+
+## Browsing
+
+Open one `.furl`, double-click it in the list, or choose Browse. The window lists the archive the way a folder does: breadcrumb, folders, name, size, modified date, and kind. That list does not decompress the payload. Return opens a file (a folder just moves into it). Space previews the selected file. Extract writes the selection, and Extract All writes every file. Those three read the solid stream, once, and keep it while the browser stays open. A symlink is shown and is not followed. Per-file compressed sizes are not stored.
 
 ## Limits (1.x)
 
