@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.5.16
+
+- Return and Space follow the selected row. Opening a .furl reads the file table without freezing the window, and a drop during a read does not dismiss that window. A path that is also a folder is rejected instead of replacing the folder. The compressor is unchanged.
+
 ## 1.5.15
 
 - Opening a .furl stays in one window.

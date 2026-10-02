@@ -34,7 +34,7 @@ Version 1 tables stop at mtime. Unpackers must still read v1; v1 files get infer
 
 POSIX mtime is whole seconds. A time before 1970 is a signed 64-bit count in the same 8 bytes. A reader from 1.5.8 or earlier would show that count as a date far in the future. Those readers never wrote one: the writer stopped before saving the file. A non-negative time is stored the same way as before.
 
-Paths are relative, unique, at most 65,535 UTF-8 bytes, and must not contain `\\`, `:`, NUL, empty segments, `.`, or `..`. Unpackers must reject those paths rather than rewrite them. Extraction writes files before symlinks and refuses to follow a symlink while creating a path, so a link cannot redirect a later entry outside the destination. Trailing bytes after the compressed payload are invalid.
+Paths are relative, unique, at most 65,535 UTF-8 bytes, and must not contain `\\`, `:`, NUL, empty segments, `.`, or `..`. One path must not be a prefix of another (`dir` and `dir/a.txt`); a file and a folder cannot share a name. Unpackers must reject those paths rather than rewrite them. Extraction writes files before symlinks and refuses to follow a symlink while creating a path, so a link cannot redirect a later entry outside the destination. Trailing bytes after the compressed payload are invalid.
 
 The payload is the concatenation of file contents, compressed with the FCM1 stream codec. Furl 1.x holds that solid payload in memory (capped at 8 GiB). The file table can be read without decompressing the payload. Per-file compressed sizes are not stored; only the whole-archive compressed length is.
 

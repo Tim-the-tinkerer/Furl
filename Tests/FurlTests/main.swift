@@ -620,6 +620,12 @@ expectThrow("reject empty segment", containing: "empty segment") {
 expectThrow("reject empty path", containing: "Empty") {
     _ = try FurlArchive.pack([FurlEntry(path: "", data: Data([1]))])
 }
+expectThrow("file and folder path", containing: "conflicts") {
+    _ = try FurlArchive.pack([
+        FurlEntry(path: "dir", data: Data([1])),
+        FurlEntry(path: "dir/a.txt", data: Data([2])),
+    ])
+}
 expectThrow("reject duplicate", containing: "Duplicate") {
     let a = FurlEntry(path: "x.txt", data: Data([1]))
     let b = FurlEntry(path: "x.txt", data: Data([2]))
@@ -857,6 +863,19 @@ do {
     ]
     let clashRows = FurlBrowserIndex.children(of: "", in: clash)
     expect(clashRows.count == 1 && clashRows[0].isDirectory && clashRows[0].path == "dir" && clashRows[0].uncompressedSize == 10, "directory wins over a same-named file")
+}
+
+do {
+    let folder = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("furl-conflict-\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: folder) }
+    expectThrow("write path conflict", containing: "conflicts") {
+        try FurlArchive.writeEntries([
+            FurlEntry(path: "dir", data: Data([1])),
+            FurlEntry(path: "dir/a.txt", data: Data([2])),
+        ], into: folder)
+    }
+    expect(!FileManager.default.fileExists(atPath: folder.appendingPathComponent("dir").path), "conflict did not create a file")
+    expect(!FileManager.default.fileExists(atPath: folder.appendingPathComponent("dir/a.txt").path), "conflict did not create a nested file")
 }
 
 do {

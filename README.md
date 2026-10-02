@@ -2,7 +2,7 @@
 
 Native macOS app with a **custom lossless compressor**. It is not a front end for 7-Zip. The codec is LZ77 matching plus a context-mixing arithmetic coder, packed as a solid `.furl` archive.
 
-**Version:** 1.5.15 — see [CHANGELOG.md](CHANGELOG.md).
+**Version:** 1.5.16 — see [CHANGELOG.md](CHANGELOG.md).
 
 ## Where Furl should land
 

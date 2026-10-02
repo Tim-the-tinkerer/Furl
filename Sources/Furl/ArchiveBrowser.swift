@@ -15,7 +15,7 @@ struct FurlArchiveBrowser: View {
                     Image(systemName: "folder")
                         .font(.system(size: 28))
                         .foregroundStyle(.secondary)
-                    Text("Empty folder")
+                    Text(model.listing == nil ? "Reading the file table…" : "Empty folder")
                         .font(.headline)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -211,26 +211,35 @@ private struct FurlEntryTable: NSViewRepresentable {
             }
         }
 
-        @objc func openClicked(_ sender: Any?) { openSelection() }
-        @objc func previewClicked(_ sender: Any?) { quickLookSelection() }
+        @objc func openClicked(_ sender: Any?) { openRow(preferClick: true) }
+        @objc func previewClicked(_ sender: Any?) { previewRow(preferClick: true) }
         @objc func extractClicked(_ sender: Any?) {
-            guard let row = clickedOrSelected() else { return }
+            guard let row = row(preferClick: true) else { return }
             parent.onExtract(row)
         }
 
-        func openSelection() {
-            guard let row = clickedOrSelected() else { return }
+        func openSelection() { openRow(preferClick: false) }
+        func quickLookSelection() { previewRow(preferClick: false) }
+
+        private func openRow(preferClick: Bool) {
+            guard let row = row(preferClick: preferClick) else { return }
             parent.onOpen(row)
         }
 
-        func quickLookSelection() {
-            guard let row = clickedOrSelected() else { return }
+        private func previewRow(preferClick: Bool) {
+            guard let row = row(preferClick: preferClick) else { return }
             parent.onQuickLook(row)
         }
 
-        private func clickedOrSelected() -> FurlBrowserRow? {
+        /// A click still has `clickedRow` set after the selection moves. Return and Space follow the selection.
+        private func row(preferClick: Bool) -> FurlBrowserRow? {
             guard let table else { return nil }
-            let index = table.clickedRow >= 0 ? table.clickedRow : table.selectedRow
+            let index: Int
+            if preferClick, table.clickedRow >= 0 {
+                index = table.clickedRow
+            } else {
+                index = table.selectedRow
+            }
             guard index >= 0, index < parent.rows.count else { return nil }
             return parent.rows[index]
         }

@@ -102,6 +102,7 @@ public enum FurlArchive {
                 throw FurlError.format("Archive contents exceed \(maxSolidBytes) bytes. Furl 1.x holds the solid stream in memory.")
             }
         }
+        try rejectPathConflicts(entries.map(\.path))
 
         /* Same idea as 7-Zip solid: group by extension then name so similar
            files sit in the same match window (e.g. two AppKit-*.pcm caches). */
@@ -323,6 +324,7 @@ public enum FurlArchive {
     /// Files are written before symlinks. A path is not allowed to descend through a symlink, whether that link is in the archive or already in `folder`.
     public static func writeEntries(_ entries: [FurlEntry], into folder: URL) throws {
         try rejectSymlinkTraversal(entries)
+        try rejectPathConflicts(entries.map(\.path))
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let fm = FileManager.default
         let ordered = entries.filter { $0.symlinkTarget == nil } + entries.filter { $0.symlinkTarget != nil }
@@ -485,6 +487,23 @@ public enum FurlArchive {
 
     public static func isArchive(url: URL) -> Bool {
         url.pathExtension.lowercased() == fileExtension
+    }
+
+    /// `dir` and `dir/a.txt` cannot both exist. Writing the file would replace the folder.
+    private static func rejectPathConflicts(_ paths: [String]) throws {
+        let set = Set(paths)
+        for path in set {
+            var parts = path.split(separator: "/").map(String.init)
+            guard parts.count > 1 else { continue }
+            parts.removeLast()
+            var prefix = ""
+            for part in parts {
+                prefix = prefix.isEmpty ? part : prefix + "/" + part
+                if set.contains(prefix) {
+                    throw FurlError.format("Path conflicts with a folder: \(prefix)")
+                }
+            }
+        }
     }
 
     /// A file or link stored under a symlink entry would be written through that link.

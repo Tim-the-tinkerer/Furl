@@ -63,7 +63,7 @@ struct ContentView: View {
     private var fileArea: some View {
         VStack(alignment: .leading, spacing: 10) {
             dropZone
-            if model.listing != nil {
+            if model.showsBrowser {
                 FurlArchiveBrowser()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if model.items.isEmpty {
@@ -152,7 +152,7 @@ struct ContentView: View {
     }
 
     private var controls: some View {
-        if model.listing != nil {
+        if model.showsBrowser {
             return AnyView(browserControls)
         }
         return AnyView(packControls)
@@ -242,7 +242,7 @@ struct ContentView: View {
                 .buttonStyle(FurlButtonStyle())
                 .disabled(model.isStopping)
                 .keyboardShortcut(".", modifiers: .command)
-                .help("Stop the current Furl, Unfurl, or race")
+                .help("Stop the current work")
         }
     }
 

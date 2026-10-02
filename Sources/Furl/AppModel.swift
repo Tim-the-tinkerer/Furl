@@ -92,6 +92,11 @@ final class AppModel: ObservableObject {
     @Published var isStopping = false
     @Published var progress: Double = 0
     private var runControl: RunControl?
+    private enum Activity { case furl, unfurl, race, browse, solid }
+    private var activity: Activity?
+    private var browseToken = 0
+    private var solidGeneration = 0
+    private var solidLoad: Task<[FurlEntry], Error>?
     static let idleStatus = "Drop files to compress them with Furl."
 
     private let defaults = UserDefaults.standard
@@ -129,6 +134,8 @@ final class AppModel: ObservableObject {
     private var materialized: [FurlEntry]?
     private var previewRoot: URL?
 
+    var showsBrowser: Bool { listing != nil || activity == .browse }
+
     var browserRows: [FurlBrowserRow] {
         guard let listing else { return [] }
         return FurlBrowserIndex.children(of: browserPath, in: listing.files)
@@ -163,13 +170,15 @@ final class AppModel: ObservableObject {
                 bytes: size
             ))
         }
-        if urls.count == 1, let url = urls.first, !isWorking, !FileGather.shouldSkip(url, options: gatherOptions) {
+        let canOpenArchive = !isWorking || activity == .browse
+        if urls.count == 1, let url = urls.first, canOpenArchive, !FileGather.shouldSkip(url, options: gatherOptions) {
             let isDir = (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true
             if !isDir && FurlArchive.isArchive(url: url) {
                 browse(url)
                 return
             }
         }
+        if isWorking { return }
         if listing != nil {
             closeBrowser()
         }
@@ -190,30 +199,68 @@ final class AppModel: ObservableObject {
     }
 
     func browse(_ url: URL) {
-        guard !isWorking else { return }
-        closeBrowser()
-        do {
-            let data = try Data(contentsOf: url)
-            let listed = try FurlArchive.catalog(data)
-            listing = listed
-            browserURL = url
-            browserPath = ""
-            browserSelection = []
-            let solid = bytes(Int(listed.compressedBytes))
-            let raw = bytes(Int(listed.uncompressedBytes))
-            status = "\(url.lastPathComponent) · \(listed.files.count) item(s) · \(raw) unpacked, \(solid) solid. The list does not unpack the archive."
-        } catch {
-            alertMessage = error.localizedDescription
-            status = "Could not browse that archive."
+        if isWorking, activity != .browse { return }
+        if activity == .browse {
+            runControl?.stop()
         }
-    }
-
-    func closeBrowser() {
+        browseToken += 1
+        let token = browseToken
+        let control = beginRun("Reading the file table…", .browse)
         listing = nil
         browserURL = nil
         browserPath = ""
         browserSelection = []
+        discardSolidCache()
+        Task {
+            let listed: FurlListing
+            do {
+                listed = try await Task.detached {
+                    if control.isStopped { throw FurlError.cancelled }
+                    let data = try Data(contentsOf: url)
+                    if control.isStopped { throw FurlError.cancelled }
+                    return try FurlArchive.catalog(data)
+                }.value
+            } catch {
+                guard self.browseToken == token else { return }
+                self.noteFailure(error, failed: "Could not browse that archive.")
+                self.endRun()
+                return
+            }
+            guard self.browseToken == token else { return }
+            if control.isStopped {
+                self.noteFailure(FurlError.cancelled, failed: "Could not browse that archive.")
+                self.endRun()
+                return
+            }
+            self.discardSolidCache()
+            self.listing = listed
+            self.browserURL = url
+            self.browserPath = ""
+            self.browserSelection = []
+            let solid = bytes(Int(listed.compressedBytes))
+            let raw = bytes(Int(listed.uncompressedBytes))
+            self.status = "\(url.lastPathComponent) · \(listed.files.count) item(s) · \(raw) unpacked, \(solid) solid. The list does not unpack the archive."
+            self.endRun()
+        }
+    }
+
+    func closeBrowser() {
+        browseToken += 1
+        if activity == .browse || activity == .solid {
+            runControl?.stop()
+            endRun()
+        }
+        listing = nil
+        browserURL = nil
+        browserPath = ""
+        browserSelection = []
+        discardSolidCache()
+    }
+
+    private func discardSolidCache() {
+        solidGeneration += 1
         materialized = nil
+        solidLoad = nil
         if let previewRoot {
             try? FileManager.default.removeItem(at: previewRoot)
             self.previewRoot = nil
@@ -314,8 +361,11 @@ final class AppModel: ObservableObject {
     }
 
     private func revealBrowsed(_ row: FurlBrowserRow, quickLook: Bool) async {
+        let opened = browserURL
+        guard opened != nil else { return }
         do {
             let entries = try await loadSolidEntries()
+            guard browserURL == opened else { return }
             guard let entry = entries.first(where: { $0.path == row.path }) else {
                 alertMessage = "\(row.name) is not in this archive."
                 return
@@ -335,13 +385,17 @@ final class AppModel: ObservableObject {
                 status = "Opened \(row.name)."
             }
         } catch {
+            guard browserURL == opened else { return }
             noteFailure(error, failed: quickLook ? "Preview failed." : "Open failed.")
         }
     }
 
     private func extractBrowsed(paths: [String]?, to dest: URL, label: String) async {
+        let opened = browserURL
+        guard opened != nil else { return }
         do {
             let entries = try await loadSolidEntries()
+            guard browserURL == opened else { return }
             let chosen: [FurlEntry]
             if let paths {
                 let wanted = Set(paths)
@@ -360,25 +414,40 @@ final class AppModel: ObservableObject {
             status = "Extracted \(chosen.count) item(s) (\(label)) into \(folder.lastPathComponent)."
             progress = 1
         } catch {
+            guard browserURL == opened else { return }
             noteFailure(error, failed: "Extract failed.")
         }
     }
 
     private func loadSolidEntries() async throws -> [FurlEntry] {
         if let materialized { return materialized }
+        if let solidLoad { return try await solidLoad.value }
         guard let archiveURL = browserURL else {
             throw FurlError.format("No archive is open.")
         }
-        let control = beginRun("Reading the solid archive…")
+        solidGeneration += 1
+        let generation = solidGeneration
+        let control = beginRun("Reading the solid archive…", .solid)
         let report = progressHandler(control)
-        defer { endRun() }
-        let entries = try await Task.detached {
-            let data = try Data(contentsOf: archiveURL)
-            if control.isStopped { throw FurlError.cancelled }
-            return try FurlArchive.unpack(data, progress: report)
-        }.value
-        materialized = entries
-        return entries
+        let task = Task { @MainActor in
+            defer {
+                if self.solidGeneration == generation {
+                    self.solidLoad = nil
+                    if self.activity == .solid { self.endRun() }
+                }
+            }
+            let entries = try await Task.detached {
+                let data = try Data(contentsOf: archiveURL)
+                if control.isStopped { throw FurlError.cancelled }
+                return try FurlArchive.unpack(data, progress: report)
+            }.value
+            if self.browserURL == archiveURL && self.solidGeneration == generation {
+                self.materialized = entries
+            }
+            return entries
+        }
+        solidLoad = task
+        return try await task.value
     }
 
     private func previewDirectory() throws -> URL {
@@ -428,9 +497,10 @@ final class AppModel: ObservableObject {
         status = "Stopping…"
     }
 
-    private func beginRun(_ label: String) -> RunControl {
+    private func beginRun(_ label: String, _ activity: Activity) -> RunControl {
         let control = RunControl()
         runControl = control
+        self.activity = activity
         isWorking = true
         isStopping = false
         progress = 0
@@ -442,6 +512,7 @@ final class AppModel: ObservableObject {
         isWorking = false
         isStopping = false
         runControl = nil
+        activity = nil
     }
 
     private func noteFailure(_ error: Error, failed: String) {
@@ -476,7 +547,7 @@ final class AppModel: ObservableObject {
         let dest = saveURL(defaultName: defaultArchiveName(from: sources))
         guard let dest else { return }
 
-        let control = beginRun("Furling…")
+        let control = beginRun("Furling…", .furl)
         let level = Int(level)
         let options = gatherOptions
         let wantReport = level >= 9 && writeParseReport
@@ -526,7 +597,7 @@ final class AppModel: ObservableObject {
             return
         }
         let destParent = chooseDirectory() ?? first.deletingLastPathComponent()
-        let control = beginRun("Unfurling…")
+        let control = beginRun("Unfurling…", .unfurl)
         let report = progressHandler(control)
         defer { endRun() }
 
@@ -568,7 +639,7 @@ final class AppModel: ObservableObject {
     private func runRace() async {
         let sources = items.filter { !$0.isArchive }.map(\.url)
         guard !sources.isEmpty else { return }
-        let control = beginRun("Racing 7-Zip…")
+        let control = beginRun("Racing 7-Zip…", .race)
         let level = max(Int(self.level), 7)
         let options = gatherOptions
         let report = progressHandler(control)
