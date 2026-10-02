@@ -43,12 +43,12 @@ struct FurlApp: App {
                 Button("Browse") { model.browseLatestArchive() }
                     .keyboardShortcut("b", modifiers: [.command, .shift])
                     .disabled(!model.canBrowse)
-                Button("Race 7-Zip") { model.race() }
+                Button("Race") { model.race() }
                     .keyboardShortcut("r", modifiers: [.command, .shift])
                     .disabled(!model.canRace)
                 Divider()
                 Button("Show in Finder") { model.revealLast() }
-                    .disabled(model.lastOutput == nil)
+                    .disabled(!model.canReveal)
             }
             CommandGroup(replacing: .help) {
                 Button("Furl Help") { showHelp() }
@@ -67,7 +67,7 @@ struct FurlApp: App {
         2. Choose density 1 (fast) through 9 (smallest)
         3. Furl writes a solid .furl archive
         4. Unfurl restores the original files
-        5. Race 7-Zip runs 7-Zip ultra on the same payload and compares sizes
+        5. Race runs ZIP -9 and 7-Zip ultra on the same files and compares sizes. The results stay in the window. Settings can also save them as Name.race.txt beside the first item.
 
         Open a single .furl, or double-click one in the list, to browse it. The list is the file table: folders, sizes, and dates, without unpacking the solid stream. Return opens a file or a folder. Space previews a file. Extract writes the selection, and Extract All writes the archive. The solid stream is read only when you preview or extract.
 
@@ -106,6 +106,11 @@ private struct SettingsCommands: Commands {
             Section("Parse report") {
                 Toggle("Write beside the archive", isOn: $model.writeParseReport)
                     .help("At density 9, save Name.parse.txt next to the .furl file")
+            }
+            .disabled(model.isWorking)
+            Section("Race results") {
+                Toggle("Save as a text file", isOn: $model.writeRaceReport)
+                    .help("After a race, write Name.race.txt beside the first item. The race panel stays in the window. On by default.")
             }
             .disabled(model.isWorking)
         }

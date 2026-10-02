@@ -49,7 +49,7 @@ struct ContentView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Furl")
                     .font(.title2.weight(.semibold))
-                Text("Custom LZ + context-mixing compressor · race it against 7-Zip")
+                Text("Custom LZ + context-mixing compressor · race it against ZIP and 7-Zip")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -211,9 +211,10 @@ struct ContentView: View {
                 Button("Unfurl") { model.unfurl() }
                     .buttonStyle(FurlButtonStyle())
                     .disabled(!model.canUnfurl)
-                Button("Race 7-Zip") { model.race() }
+                Button("Race") { model.race() }
                     .buttonStyle(FurlButtonStyle(kind: .compact))
                     .disabled(!model.canRace)
+                    .help("Compare these files with ZIP -9 and 7-Zip ultra")
                 Spacer()
                 Button("Browse") { model.browseLatestArchive() }
                     .buttonStyle(FurlButtonStyle())
@@ -247,41 +248,48 @@ struct ContentView: View {
     }
 
     private func racePanel(_ race: RaceResult) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        let badge = raceBadge(race)
+        return VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text("Race")
                     .font(.headline)
                 Spacer()
-                if let rival = race.rivalBytes, rival == race.furlBytes {
-                    Text("Tie")
-                        .font(.caption.weight(.bold))
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .foregroundStyle(.white)
-                        .background(Theme.navy)
-                        .clipShape(Capsule())
-                } else if let won = race.furlWon {
-                    Text(won ? "Furl wins" : "7-Zip wins")
-                        .font(.caption.weight(.bold))
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .foregroundStyle(.white)
-                        .background(won ? Theme.teal : Theme.copper)
-                        .clipShape(Capsule())
-                }
+                Text(badge.0)
+                    .font(.caption.weight(.bold))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .foregroundStyle(.white)
+                    .background(badge.1)
+                    .clipShape(Capsule())
             }
             HStack(spacing: 16) {
                 metric("Original", bytes(race.originalBytes), "100%")
                 metric("Furl", bytes(race.furlBytes), pct(race.furlRatio), detail: String(format: "%.2fs", race.furlSeconds))
                 metric(
-                    race.rivalName,
+                    "ZIP",
+                    race.zipBytes.map(bytes) ?? "—",
+                    race.zipRatio.map(pct) ?? "—",
+                    detail: race.zipSeconds.map { String(format: "%.2fs", $0) }
+                )
+                metric(
+                    race.rivalShortName,
                     race.rivalBytes.map(bytes) ?? "—",
                     race.rivalRatio.map(pct) ?? "—",
                     detail: race.rivalSeconds.map { String(format: "%.2fs", $0) }
                 )
             }
+            Text("\(race.zipName) · \(race.rivalName)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
         }
         .padding(16)
+    }
+
+    private func raceBadge(_ race: RaceResult) -> (String, Color) {
+        if race.verdict == "Tie" { return ("Tie", Theme.navy) }
+        if race.verdict == "Furl" { return ("Furl wins", Theme.teal) }
+        return ("\(race.verdict) wins", Theme.copper)
     }
 
     private func metric(_ title: String, _ value: String, _ sub: String, detail: String? = nil) -> some View {
@@ -309,7 +317,7 @@ struct ContentView: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
             Spacer()
-            if model.lastOutput != nil {
+            if model.canReveal {
                 Button("Show in Finder") { model.revealLast() }
                     .buttonStyle(FurlButtonStyle(kind: .compact))
             }

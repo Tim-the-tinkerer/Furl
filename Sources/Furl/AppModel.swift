@@ -88,6 +88,7 @@ final class AppModel: ObservableObject {
         }
     }
     @Published var writeParseReport: Bool { didSet { defaults.set(writeParseReport, forKey: "writeParseReport") } }
+    @Published var writeRaceReport: Bool { didSet { defaults.set(writeRaceReport, forKey: "writeRaceReport") } }
     @Published var isWorking = false
     @Published var isStopping = false
     @Published var progress: Double = 0
@@ -120,6 +121,7 @@ final class AppModel: ObservableObject {
         skipDSStore = flag("skipDSStore")
         skipResourceFork = flag("skipResourceFork")
         writeParseReport = flag("writeParseReport")
+        writeRaceReport = flag("writeRaceReport")
     }
 
     @Published var status = AppModel.idleStatus
@@ -127,6 +129,7 @@ final class AppModel: ObservableObject {
     @Published var lastOutput: URL?
     @Published var lastRace: RaceResult?
     @Published var lastReportURL: URL?
+    @Published var lastRaceReportURL: URL?
     @Published var listing: FurlListing?
     @Published var browserURL: URL?
     @Published var browserPath = ""
@@ -190,6 +193,7 @@ final class AppModel: ObservableObject {
         items.removeAll()
         lastRace = nil
         lastReportURL = nil
+        lastRaceReportURL = nil
         status = AppModel.idleStatus
     }
 
@@ -486,6 +490,7 @@ final class AppModel: ObservableObject {
         var urls: [URL] = []
         if let lastOutput { urls.append(lastOutput) }
         if let lastReportURL { urls.append(lastReportURL) }
+        if let lastRaceReportURL { urls.append(lastRaceReportURL) }
         guard !urls.isEmpty else { return }
         NSWorkspace.shared.activateFileViewerSelecting(urls)
     }
@@ -636,10 +641,17 @@ final class AppModel: ObservableObject {
         }
     }
 
+    var canReveal: Bool {
+        lastOutput != nil || lastReportURL != nil || lastRaceReportURL != nil
+    }
+
     private func runRace() async {
-        let sources = items.filter { !$0.isArchive }.map(\.url)
-        guard !sources.isEmpty else { return }
-        let control = beginRun("Racing 7-Zip…", .race)
+        let racers = items.filter { !$0.isArchive }
+        guard let first = racers.first else { return }
+        let sources = racers.map(\.url)
+        let saveReport = writeRaceReport
+        let reportURL = SevenZipRace.reportURL(beside: first.url, isDirectory: first.isDirectory, single: racers.count == 1)
+        let control = beginRun("Racing ZIP and 7-Zip…", .race)
         let level = max(Int(self.level), 7)
         let options = gatherOptions
         let report = progressHandler(control)
@@ -652,21 +664,38 @@ final class AppModel: ObservableObject {
                 return try SevenZipRace.race(entries: entries, level: level, progress: report)
             }.value
             lastRace = result
-            if let rival = result.rivalBytes {
-                if rival == result.furlBytes {
-                    status = "Tie: \(bytes(result.furlBytes)) each."
-                } else if result.furlWon == true {
-                    status = "Furl won: \(bytes(result.furlBytes)) vs \(bytes(rival))."
-                } else {
-                    status = "\(result.rivalName) was smaller this time."
+            var line = raceStatus(result)
+            if saveReport {
+                do {
+                    try result.document.write(to: reportURL, atomically: true, encoding: .utf8)
+                    lastRaceReportURL = reportURL
+                    line += " Results: \(reportURL.lastPathComponent)."
+                } catch {
+                    lastRaceReportURL = nil
+                    alertMessage = "The race finished. The results file could not be saved: \(error.localizedDescription)"
                 }
             } else {
-                status = "Furl \(bytes(result.furlBytes)). Rival unavailable."
+                lastRaceReportURL = nil
             }
+            status = line
             progress = 1
         } catch {
             noteFailure(error, failed: "Race failed.")
         }
+    }
+
+    private func raceStatus(_ result: RaceResult) -> String {
+        var parts = ["Furl \(bytes(result.furlBytes))"]
+        if let zip = result.zipBytes {
+            parts.append("ZIP \(bytes(zip))")
+        } else {
+            parts.append("ZIP unavailable")
+        }
+        if let rival = result.rivalBytes {
+            parts.append("\(result.rivalShortName) \(bytes(rival))")
+        }
+        let tail = result.verdict == "Tie" ? "Tie." : "\(result.verdict) wins."
+        return parts.joined(separator: " · ") + " " + tail
     }
 
     private func defaultArchiveName(from urls: [URL]) -> String {

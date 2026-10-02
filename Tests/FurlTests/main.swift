@@ -283,20 +283,76 @@ do {
     expect(false, "symlink traversal \(error)")
 }
 
-if let seven = SevenZipRace.sevenZipURL() {
-    do {
-        let result = try SevenZipRace.race(entries: [FurlEntry(path: "fox.txt", data: fox)], level: 7)
-        expect(result.originalBytes == 8000, "race orig")
-        expect(result.furlBytes > 0, "race furl size")
+let tie = RaceResult(
+        originalBytes: 100,
+        furlBytes: 40,
+        furlSeconds: 1,
+        rivalBytes: 40,
+        rivalSeconds: 2,
+        rivalName: "7-Zip ultra (LZMA2, 4 threads)",
+        furlWon: false,
+        level: 7,
+        zipBytes: 50,
+        zipSeconds: 0.2,
+        zipName: "ZIP -9"
+    )
+    expect(tie.verdict == "Tie", "equal Furl and 7-Zip is a tie, got \(tie.verdict)")
+    expect(tie.furlWon == false, "a tie is not a Furl win")
+    expect(tie.document.contains("ZIP  50"), "race report lists the zip size")
+    expect(tie.document.contains("Smallest  Tie"), "race report names the tie")
+    let zipWins = RaceResult(
+        originalBytes: 100, furlBytes: 40, furlSeconds: 1,
+        rivalBytes: 40, rivalSeconds: 2, rivalName: "7-Zip ultra (LZMA2, 4 threads)",
+        furlWon: false, level: 7, zipBytes: 10, zipSeconds: 0.1, zipName: "ZIP -9"
+    )
+    expect(zipWins.verdict == "ZIP", "zip can be the smallest, got \(zipWins.verdict)")
+    let folder = SevenZipRace.reportURL(
+        beside: URL(fileURLWithPath: "/tmp/Notes", isDirectory: true),
+        isDirectory: true,
+        single: true
+    )
+    expect(folder.lastPathComponent == "Notes.race.txt", "folder race file \(folder.lastPathComponent)")
+    let file = SevenZipRace.reportURL(
+        beside: URL(fileURLWithPath: "/tmp/notes.txt"),
+        isDirectory: false,
+        single: true
+    )
+    expect(file.path.hasSuffix("/notes.race.txt"), "file race path \(file.path)")
+    expect(!file.path.contains("/notes.txt/"), "file race stays beside the file")
+    let many = SevenZipRace.reportURL(
+        beside: URL(fileURLWithPath: "/tmp/notes.txt"),
+        isDirectory: false,
+        single: false
+    )
+    expect(many.lastPathComponent == "Archive.race.txt", "multi race file \(many.lastPathComponent)")
+
+do {
+    let result = try SevenZipRace.race(entries: [FurlEntry(path: "fox.txt", data: fox)], level: 7)
+    expect(result.originalBytes == 8000, "race orig")
+    expect(result.furlBytes > 0, "race furl size")
+    expect(result.level == 7, "race records the density")
+    expect(result.document.hasPrefix("Furl race\n"), "race report title")
+    expect(result.document.contains("\(result.furlBytes)"), "race report has the furl size")
+    if let seven = SevenZipRace.sevenZipURL() {
         expect(result.rivalBytes != nil, "7-Zip at \(seven.path) produced a size")
         if let rival = result.rivalBytes {
             expect(result.furlBytes < rival, "Furl \(result.furlBytes) should beat 7-Zip \(rival) on repeating fox")
+            expect(result.furlWon == true, "furlWon stays strict less-than against 7-Zip")
         }
-    } catch {
-        expect(false, "race \(error)")
+    } else {
+        fputs("note: 7-Zip not installed, skipping 7-Zip size check\n", stderr)
     }
-} else {
-    fputs("note: 7-Zip not installed, skipping race\n", stderr)
+    if SevenZipRace.zipURL() != nil {
+        expect(result.zipBytes != nil, "zip produced a size")
+        if let zip = result.zipBytes {
+            expect(result.furlBytes < zip, "Furl \(result.furlBytes) should beat ZIP \(zip) on repeating fox")
+            expect(result.document.contains("ZIP  \(zip)"), "race report lists zip")
+        }
+    } else {
+        fputs("note: zip not installed, skipping zip size check\n", stderr)
+    }
+} catch {
+    expect(false, "race \(error)")
 }
 
 do {

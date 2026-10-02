@@ -17,11 +17,11 @@
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.5.16</string>
+    <string>1.5.17</string>
     <key>CFBundleVersion</key>
-    <string>30</string>
+    <string>31</string>
     <key>CFBundleGetInfoString</key>
-    <string>Furl 1.5.16</string>
+    <string>Furl 1.5.17</string>
     <key>NSHumanReadableCopyright</key>
     <string>Copyright © 2026</string>
     <key>LSMinimumSystemVersion</key>

@@ -79,15 +79,6 @@ enum CLI {
         guard let input = rest.first else { throw FurlError.format(usage) }
         let entries = try FileGather.entries(from: [URL(fileURLWithPath: input)])
         let result = try SevenZipRace.race(entries: entries, level: level)
-        print("original  \(result.originalBytes)")
-        print("furl      \(result.furlBytes)  \(String(format: "%.2fs", result.furlSeconds))")
-        if let rival = result.rivalBytes {
-            print("rival     \(rival)  \(result.rivalName)")
-            if rival == result.furlBytes {
-                print("winner    tie")
-            } else {
-                print(result.furlWon == true ? "winner    Furl" : "winner    rival")
-            }
-        }
+        print(result.document, terminator: "")
     }
 }

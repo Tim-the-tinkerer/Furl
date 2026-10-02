@@ -2,15 +2,15 @@
 
 Native macOS app with a **custom lossless compressor**. It is not a front end for 7-Zip. The codec is LZ77 matching plus a context-mixing arithmetic coder, packed as a solid `.furl` archive.
 
-**Version:** 1.5.16 — see [CHANGELOG.md](CHANGELOG.md).
+**Version:** 1.5.17 — see [CHANGELOG.md](CHANGELOG.md).
 
 ## Where Furl should land
 
 On an ordinary folder, Furl should usually sit between ZIP and 7-Zip, and it should not fall badly behind either one. Beating 7-Zip on highly redundant data is a bonus, not the goal. `Scripts/benchmark.sh` prints that comparison. The gap column is how far Furl sits from the larger archive toward the smaller one: 100% matches the smaller tool, 0% matches the larger one.
 
-Large natural-language / source corpora use an order-5 PPM path. A long run of short, similar lines is tried as 1 MB Burrows-Wheeler blocks. Move-to-front zeros in that block are run-coded, and the block is kept only when a sample is clearly smaller than order-5 PPM. Other data uses LZ77 plus context mixing. On the 17 MB “404 sources” text dump Furl is ~5.4 MB vs zip ~6.6 MB vs 7-Zip ultra ~5.0 MB. The **Race 7-Zip** button shows both sizes on whatever you drop.
+Large natural-language / source corpora use an order-5 PPM path. A long run of short, similar lines is tried as 1 MB Burrows-Wheeler blocks. Move-to-front zeros in that block are run-coded, and the block is kept only when a sample is clearly smaller than order-5 PPM. Other data uses LZ77 plus context mixing. On the 17 MB “404 sources” text dump Furl is ~5.4 MB vs zip ~6.6 MB vs 7-Zip ultra ~5.0 MB. The **Race** button shows original, Furl, ZIP -9, and 7-Zip ultra on whatever you drop.
 
-7-Zip’s LZMA2 can still win on some unique text, source trees, and binaries. Already-compressed media (JPEG, MP4, zip) stays stored once Furl recognizes it, unless those same bytes show up again: a repeated icon is matched, a shared file header is not. The race panel always shows both sizes so you can see who won for *this* payload.
+7-Zip’s LZMA2 can still win on some unique text, source trees, and binaries. Already-compressed media (JPEG, MP4, zip) stays stored once Furl recognizes it, unless those same bytes show up again: a repeated icon is matched, a shared file header is not. The race panel always shows those sizes so you can see who won for *this* payload. Settings can also write `Name.race.txt` beside the first item. That file is on by default, and the panel stays either way.
 
 Density 9 can write that report beside the archive as `Name.parse.txt`: which model ran, how long the matches were, how far away they were, how often a previous distance was reused, how many short matches were turned down, and whether the arithmetic coder matched the probabilities it was given. The parser keeps a match only when that token is cheaper than literals. At density 9, a stretch of short matches shortens the hash-chain search; a long match the short chain cannot see restores it. A large block samples LZ, PPM, and the filters, and backs off a choice when the samples agree it is the expensive one. A near-random stretch at the start or end of a large LZ block is stored; the same stretch in the middle stays, so a match can still cross it. The Settings menu turns the file on or off. It is on by default, and it is not part of the archive. The CLI prints the same report.
 
@@ -21,10 +21,10 @@ Density 9 can write that report beside the archive as `Name.parse.txt`: which mo
 - Stop (⌘.) cancels a running compression, expand, or race
 - Solid `.furl` archives
 - Unfurl restores the original tree
-- Race 7-Zip ultra, multi-threaded LZMA2 (uses `/opt/homebrew/bin/7z` when present; otherwise system LZMA across cores)
+- Race ZIP -9 and 7-Zip ultra, multi-threaded LZMA2 (uses `/usr/bin/zip` and `/opt/homebrew/bin/7z` when present; otherwise system LZMA stands in for 7-Zip)
 - CLI on the same binary
 - Skips Apple metadata by default: `._*` AppleDouble, `__MACOSX`, `.DS_Store`, resource forks (Settings menu)
-- Settings can turn the density 9 parse report on or off
+- Settings can turn the density 9 parse report on or off, and can save a race as `Name.race.txt`
 - Browse a .furl. Folders, sizes, and dates come from the file table, so the list does not unpack the solid stream. Opening, Quick Look, and Extract read that stream once
 
 ## Browsing

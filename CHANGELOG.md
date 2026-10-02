@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.5.17
+
+- The race also runs ZIP -9, with the same flags as the benchmark. The panel shows original, Furl, ZIP, and 7-Zip, and it stays on screen. Settings can save that result as `Name.race.txt` beside the first item. The switch is on by default. The compressor is unchanged.
+
 ## 1.5.16
 
 - Return and Space follow the selected row. Opening a .furl reads the file table without freezing the window, and a drop during a read does not dismiss that window. A path that is also a folder is rejected instead of replacing the folder. The compressor is unchanged.
